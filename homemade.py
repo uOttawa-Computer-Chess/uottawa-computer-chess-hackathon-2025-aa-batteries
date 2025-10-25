@@ -212,7 +212,7 @@ class MyBot(ExampleEngine):
                     if best < beta:
                         beta = best
 
-                    if beta >= alpha:
+                    if beta <= alpha:
                         break
 
                 return best
