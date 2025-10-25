@@ -4,6 +4,7 @@ Some example classes for people who want to create a homemade bot.
 With these classes, bot makers will not have to implement the UCI or XBoard interfaces themselves.
 """
 import chess
+import chess.polyglot
 from chess.engine import PlayResult, Limit
 import random
 from lib.engine_wrapper import MinimalEngine
@@ -95,7 +96,9 @@ class ComboEngine(ExampleEngine):
             move = possible_moves[0]
         return PlayResult(move, None, draw_offered=draw_offered)
 
-    
+transposition_table = {}
+
+
 class MyBot(ExampleEngine):
     """Template code for hackathon participants to modify.
 
@@ -158,7 +161,7 @@ class MyBot(ExampleEngine):
         total_depth = max(1, int(total_depth))
 
         # --- simple material evaluator (White-positive score) ---
-        def evaluate(b: chess.Board) -> int:
+        def evaluate(b: chess.Board, depth: int) -> int:
             # Large score for terminal outcomes
             if b.is_game_over():
                 outcome = b.outcome()
@@ -174,15 +177,22 @@ class MyBot(ExampleEngine):
                 chess.QUEEN: 900,
                 chess.KING: 0,  # king material ignored (checkmates handled above)
             }
+
+            _hash = chess.polyglot.zobrist_hash(b) ^ depth
+            if _hash in transposition_table:
+                return transposition_table[_hash]
+
             score = 0
             for pt, v in values.items():
                 score += v * (len(b.pieces(pt, chess.WHITE)) - len(b.pieces(pt, chess.BLACK)))
+
+            transposition_table[_hash] = score
             return score
         
         # --- plain minimax (no alpha-beta) ---
         def minimax(b: chess.Board, depth: int, maximizing: bool, alpha, beta) -> int:
             if depth == 0 or b.is_game_over():
-                return evaluate(b)
+                return evaluate(b, depth)
 
             if maximizing:
                 best = -10**12
