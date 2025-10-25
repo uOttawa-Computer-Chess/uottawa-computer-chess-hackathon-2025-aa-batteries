@@ -180,7 +180,7 @@ class MyBot(ExampleEngine):
             return score
 
         # --- plain minimax (no alpha-beta) ---
-        def minimax(b: chess.Board, depth: int, maximizing: bool) -> int:
+        def minimax(b: chess.Board, depth: int, maximizing: bool, alpha, beta) -> int:
             if depth == 0 or b.is_game_over():
                 return evaluate(b)
 
@@ -188,19 +188,33 @@ class MyBot(ExampleEngine):
                 best = -10**12
                 for m in b.legal_moves:
                     b.push(m)
-                    val = minimax(b, depth - 1, False)
+                    val = minimax(b, depth - 1, False, alpha, beta)
                     b.pop()
                     if val > best:
                         best = val
+                    
+                    if best > alpha:
+                        alpha = best
+
+                    if beta <= alpha:
+                        break
+
                 return best
             else:
                 best = 10**12
                 for m in b.legal_moves:
                     b.push(m)
-                    val = minimax(b, depth - 1, True)
+                    val = minimax(b, depth - 1, True, alpha, beta)
                     b.pop()
                     if val < best:
                         best = val
+
+                    if best < beta:
+                        beta = best
+
+                    if beta >= alpha:
+                        break
+
                 return best
 
         # --- root move selection ---
@@ -216,7 +230,7 @@ class MyBot(ExampleEngine):
         # Lookahead depth chosen by the simple time heuristic; subtract one for the root move
         for m in legal:
             board.push(m)
-            val = minimax(board, total_depth - 1, not maximizing)
+            val = minimax(board, total_depth - 1, not maximizing, -10**12, 10**12)
             board.pop()
 
             if maximizing and val > best_eval:
