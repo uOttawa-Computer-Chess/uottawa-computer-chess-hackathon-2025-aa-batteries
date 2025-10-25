@@ -97,7 +97,9 @@ class ComboEngine(ExampleEngine):
         return PlayResult(move, None, draw_offered=draw_offered)
 
 transposition_table = {}
-
+EXACT_SCORE = 0
+LOWER_BOUND_SCORE = 1
+UPPER_BOUND_SCORE = 2
 
 class MyBot(ExampleEngine):
     """Template code for hackathon participants to modify.
@@ -126,6 +128,8 @@ class MyBot(ExampleEngine):
 
         # --- very simple time-based depth selection (naive) ---
         # Expect args to be (time_limit: Limit, ponder: bool, draw_offered: bool, root_moves: MOVE)
+        
+        transposition_table.clear()       
         time_limit = args[0] if (args and isinstance(args[0], Limit)) else None
         my_time = my_inc = None
         if time_limit is not None:
@@ -149,9 +153,9 @@ class MyBot(ExampleEngine):
         inc = my_inc if isinstance(my_inc, (int, float)) else 0
         budget = (remaining or 0) + 2 * inc  # crude increment bonus
         if remaining is None:
-            total_depth = 4
+            total_depth = 3
         elif budget >= 60:
-            total_depth = 4
+            total_depth = 3
         elif budget >= 20:
             total_depth = 3
         elif budget >= 5:
@@ -163,6 +167,7 @@ class MyBot(ExampleEngine):
         # --- simple material evaluator (White-positive score) ---
         def evaluate(b: chess.Board, depth: int) -> int:
             # Large score for terminal outcomes
+
             if b.is_game_over():
                 outcome = b.outcome()
                 if outcome is None or outcome.winner is None:
@@ -178,25 +183,78 @@ class MyBot(ExampleEngine):
                 chess.KING: 0,  # king material ignored (checkmates handled above)
             }
 
-            _hash = chess.polyglot.zobrist_hash(b) ^ depth
-            if _hash in transposition_table:
-                return transposition_table[_hash]
+            # _hash = chess.polyglot.zobrist_hash(b) ^ depth
+            # _hash = chess.polyglot.zobrist_hash(b)
+            # if _hash in transposition_table:
+            #     return transposition_table[_hash]
 
             score = 0
             for pt, v in values.items():
                 score += v * (len(b.pieces(pt, chess.WHITE)) - len(b.pieces(pt, chess.BLACK)))
 
-            transposition_table[_hash] = score
+            # transposition_table[_hash] = score
             return score
         
-        # --- plain minimax (no alpha-beta) ---
+        def move_score(board: chess.Board, move: chess.Move) -> int:            
+            values = {
+                chess.PAWN: 100,
+                chess.KNIGHT: 320,
+                chess.BISHOP: 330,
+                chess.ROOK: 500,
+                chess.QUEEN: 900,
+                chess.KING: 1000, 
+            }
+           
+            if board.is_capture(move):
+                if board.is_en_passant(move):
+                    victim_type = chess.PAWN
+                else:
+                    destination = move.to_square
+                    victim_type = board.piece_type_at(destination)
+
+                    if victim_type is None:
+                        return 0
+                    
+                attacker_type = board.piece_type_at(move.from_square)
+
+                return values[victim_type] * 10 - values[attacker_type]
+            
+            return 0
+
+        def  mmv_lva_order(board: chess.Board, moves:list[chess.Move]) -> list[chess.Move]:
+            return sorted(moves, key=lambda m: move_score(board, m), reverse=True)
+
         def minimax(b: chess.Board, depth: int, maximizing: bool, alpha, beta) -> int:
+            legal = list(b.legal_moves)
+            ordered_legal = mmv_lva_order(b, legal)
+            
+            og_alpha = alpha
+
+            _hash = chess.polyglot.zobrist_hash(b)
+            
+            if _hash in transposition_table:
+                entry_depth, entry_score, entry_flag = transposition_table[_hash]
+
+                if entry_depth >= depth:
+                    if (entry_flag == EXACT_SCORE):
+                        return entry_score
+                    elif (entry_flag == LOWER_BOUND_SCORE):
+                        if (entry_score > alpha):
+                            alpha = entry_score
+                    elif(entry_flag == UPPER_BOUND_SCORE):
+                        if (entry_score < beta):
+                            beta = entry_score
+                    
+                    if (alpha >= beta):
+                        return entry_score
+
+                    
             if depth == 0 or b.is_game_over():
                 return evaluate(b, depth)
 
             if maximizing:
                 best = -10**12
-                for m in b.legal_moves:
+                for m in ordered_legal:
                     b.push(m)
                     val = minimax(b, depth - 1, False, alpha, beta)
                     b.pop()
@@ -208,11 +266,18 @@ class MyBot(ExampleEngine):
 
                     if beta <= alpha:
                         break
+                flag = EXACT_SCORE
+                if (best <= og_alpha):
+                    flag = UPPER_BOUND_SCORE
+                elif (best >= beta):
+                    flag = LOWER_BOUND_SCORE
+                
+                transposition_table[_hash] = (depth, best, flag)
 
                 return best
             else:
                 best = 10**12
-                for m in b.legal_moves:
+                for m in ordered_legal:
                     b.push(m)
                     val = minimax(b, depth - 1, True, alpha, beta)
                     b.pop()
@@ -224,6 +289,14 @@ class MyBot(ExampleEngine):
 
                     if beta <= alpha:
                         break
+
+                flag = EXACT_SCORE
+                if (best <= og_alpha):
+                    flag = UPPER_BOUND_SCORE
+                elif (best >= beta):
+                    flag = LOWER_BOUND_SCORE
+                
+                transposition_table[_hash] = (depth, best, flag)
 
                 return best
 
