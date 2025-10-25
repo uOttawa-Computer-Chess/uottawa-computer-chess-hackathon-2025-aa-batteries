@@ -178,7 +178,7 @@ class MyBot(ExampleEngine):
             for pt, v in values.items():
                 score += v * (len(b.pieces(pt, chess.WHITE)) - len(b.pieces(pt, chess.BLACK)))
             return score
-
+        
         # --- plain minimax (no alpha-beta) ---
         def minimax(b: chess.Board, depth: int, maximizing: bool, alpha, beta) -> int:
             if depth == 0 or b.is_game_over():
@@ -217,26 +217,58 @@ class MyBot(ExampleEngine):
 
                 return best
 
+        def iterative_depth_search(b: chess.Board, max_depth: int, maximizing: bool):
+            legal = list(board.legal_moves)
+
+            best_move = None
+
+            for depth in range(max_depth + 1):
+                best_value = -10**12 if maximizing else 10**12
+                best_move_at_depth = None
+
+                for m in legal:
+                    b.push(m)
+                    value = minimax(b, depth, not maximizing, -10**12, 10**12)
+                    b.pop()
+
+                    if maximizing and (value > best_value):
+                        best_value, best_move_at_depth = value, m
+                    elif (not maximizing) and (value < best_value):
+                        best_value, best_move_at_depth = value, m
+
+                if best_move_at_depth:
+                    best_move = best_move_at_depth
+
+                    legal.remove(best_move_at_depth)
+                    legal.insert(0, best_move_at_depth)
+            
+            return best_move
+
+
+
         # --- root move selection ---
         legal = list(board.legal_moves)
         if not legal:
             # Should not happen during normal play; fall back defensively
             return PlayResult(random.choice(list(board.legal_moves)), None)
-
+        
         maximizing = board.turn == chess.WHITE
         best_move = None
-        best_eval = -10**12 if maximizing else 10**12
+        # best_eval = -10**12 if maximizing else 10**12
+
 
         # Lookahead depth chosen by the simple time heuristic; subtract one for the root move
-        for m in legal:
-            board.push(m)
-            val = minimax(board, total_depth - 1, not maximizing, -10**12, 10**12)
-            board.pop()
+        # for m in legal:
+        #     board.push(m)
+        #     val = minimax(board, total_depth - 1, not maximizing, -10**12, 10**12)
+        #     board.pop()
 
-            if maximizing and val > best_eval:
-                best_eval, best_move = val, m
-            elif not maximizing and val < best_eval:
-                best_eval, best_move = val, m
+        #     if maximizing and (val > best_eval):
+        #         best_eval, best_move = val, m
+        #     elif (not maximizing) and (val < best_eval):
+        #         best_eval, best_move = val, m
+
+        best_move = iterative_depth_search(board, total_depth, maximizing)
 
         # Fallback in rare cases (shouldn't trigger)
         if best_move is None:
