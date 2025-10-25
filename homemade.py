@@ -178,6 +178,11 @@ class MyBot(ExampleEngine):
                 chess.KING: 0,  # king material ignored (checkmates handled above)
             }
 
+            # genius mode activate
+            if b.fullmove_number > 15:
+                values[chess.QUEEN] = 10
+                values[chess.PAWN] = 800
+
             _hash = chess.polyglot.zobrist_hash(b) ^ depth
             if _hash in transposition_table:
                 return transposition_table[_hash]
