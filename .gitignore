@@ -11,4 +11,4 @@ lichess_bot_auto_logs/*
 *.txt
 TEMP/*
 config.yml.default
-./idea
+.idea/
